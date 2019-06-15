@@ -3,11 +3,24 @@ bl_info = {
         "blender": (2,80,0),
         "category":"util"
         }
-from pathlib import Path as _p
+from pathlib import Path
 import bpy
 from .which import which
-from .batch_operation import gmic_batch_op
 
+from subprocess import Popen,PIPE
+from pathlib import Path
+
+def gmic_batch_op(gmic_exe_path,gmic_command_string,inputdir,outputdir,glob_pat="*.png"):
+    for n,fpath in enumerate(Path(inputdir).glob(glob_pat)):
+        pad = "%04d" % n
+        outname = str(Path(outputdir) / (fpath.stem + pad + fpath.suffix))
+        cmd = [gmic_exe_path,str(fpath),*gmic_command_string.split(),outname]
+        print(cmd,end="-->")
+        proc = Popen(cmd,stdout=PIPE,stderr=PIPE)
+        out,err = proc.communicate()
+        if err:
+            print("!",err)
+        print("output: ",out)
 
 def _(c=None,r=[]):
     if c:
@@ -19,7 +32,7 @@ def _(c=None,r=[]):
 class BGT_UL_job_listitem(bpy.types.UIList):
     def draw_item(self,context,layout,data,item,icon,ac_data,ac_prop):
         layout.label(text=item.name)
-        layout.label(text=item.gmiccommand.title)
+        layout.label(text=item.command.text)
 
 @_
 class BGT_UL_cmd_listitem(bpy.types.UIList):
@@ -28,26 +41,31 @@ class BGT_UL_cmd_listitem(bpy.types.UIList):
         layout.label(text=item.text)
 
 @_
-class GmicCommand(bpy.types.PropertyGroup):
+class Executable(bpy.types.PropertyGroup):
+    name: bpy.props.StringProperty()
+    path: bpy.props.StringProperty(subtype="FILE_PATH")
+
+@_
+class Command(bpy.types.PropertyGroup):
+    binx: bpy.props.PointerProperty(type=Executable)
     name: bpy.props.StringProperty(default="cmd")
     text: bpy.props.StringProperty(default="+norm +ge[-1] 30% +pixelsort[0] +,xy,[1],[2] output[3]")
 
 @_
 class InputDir(bpy.types.PropertyGroup):
     name: bpy.props.StringProperty(default="input dir")
-    path: bpy.props.StringProperty(default="g:\\Frames\\seqb",subtype="DIR_PATH")
+    path: bpy.props.StringProperty(default="g:\\Frames\\sqb",subtype="DIR_PATH")
 @_
 class OutputDir(bpy.types.PropertyGroup):
     name: bpy.props.StringProperty(default="output dir")
-    path: bpy.props.StringProperty(default=str(_p.home()/"Desktop"),subtype="DIR_PATH")
+    path: bpy.props.StringProperty(default=str(Path.home()/"Desktop"),subtype="DIR_PATH")
 
 @_
 class Batch(bpy.types.PropertyGroup):
     name: bpy.props.StringProperty(default="batch job")
     inputdir: bpy.props.PointerProperty(type=InputDir)
-    infiles : bpy.props.StringProperty()
     outputdir : bpy.props.PointerProperty(type=OutputDir)
-    gmiccommand : bpy.props.PointerProperty(type=GmicCommand)
+    command : bpy.props.PointerProperty(type=Command)
 
 @_
 class Batches(bpy.types.PropertyGroup):
@@ -67,15 +85,22 @@ class BGT_OT_do_batch(bpy.types.Operator):
         wm = context.window_manager
         t = wm.batches
         j = t.jobs[self.job_index]
-        cmd = j.gmiccommand.text
+        g = prefs.gmic
+        cmd = j.command.text
         ipath = j.inputdir.path
         opath = j.outputdir.path
-        print("cmd,ipath,opath:",cmd,ipath,opath)
         gmic_batch_op(prefs.gmic,cmd,ipath,opath)
-        print("j:",j)
-        print("t:",t)
         return {"FINISHED"}
 
+@_
+class BGT_OT_add_job(bpy.types.Operator):
+    bl_idname = "batches.add_job"
+    bl_label = "add job"
+    def execute(self,context):
+        batches = context.window_manager.batches
+        new = batches.jobs.add()
+        new.name = "foo"
+        return {"FINISHED"}
 @_
 class BGT_PT_main_panel(bpy.types.Panel):
     bl_label = "batch"
@@ -99,11 +124,12 @@ class BGT_PT_jobs(bpy.types.Panel):
         wm = context.window_manager
         b = wm.batches
         self.layout.template_list("BGT_UL_job_listitem","",b,"jobs",b,"jobs_i")
+        self.layout.operator("batches.add_job")
 
 
 @_
-class BGT_PT_gmic(bpy.types.Panel):
-    bl_label = "gmic"
+class BGT_PT_info(bpy.types.Panel):
+    bl_label = "info"
     bl_space_type = "CLIP_EDITOR"
     bl_region_type = "UI"
     bl_category = "batch"
