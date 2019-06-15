@@ -1,5 +1,5 @@
 bl_info = {
-        "name": "batchgmic",
+        "name": "batches",
         "blender": (2,80,0),
         "category":"util"
         }
@@ -21,12 +21,16 @@ class BGT_UL_job_listitem(bpy.types.UIList):
         layout.label(text=item.name)
         layout.label(text=item.gmiccommand.title)
 
+@_
+class BGT_UL_cmd_listitem(bpy.types.UIList):
+    def draw_item(self,context,layout,data,item,icon,ac_data,ac_prop):
+        layout.label(text=item.name)
+        layout.label(text=item.text)
 
 @_
 class GmicCommand(bpy.types.PropertyGroup):
-    title: bpy.props.StringProperty(default="gmic command")
-    command: bpy.props.StringProperty(default="+norm +ge[-1] 30% +pixelsort[0] +,xy,[1],[2] output[3]")
-
+    name: bpy.props.StringProperty(default="cmd")
+    text: bpy.props.StringProperty(default="+norm +ge[-1] 30% +pixelsort[0] +,xy,[1],[2] output[3]")
 
 @_
 class InputDir(bpy.types.PropertyGroup):
@@ -37,7 +41,6 @@ class OutputDir(bpy.types.PropertyGroup):
     name: bpy.props.StringProperty(default="output dir")
     path: bpy.props.StringProperty(default=str(_p.home()/"Desktop"),subtype="DIR_PATH")
 
-
 @_
 class Batch(bpy.types.PropertyGroup):
     name: bpy.props.StringProperty(default="batch job")
@@ -46,16 +49,14 @@ class Batch(bpy.types.PropertyGroup):
     outputdir : bpy.props.PointerProperty(type=OutputDir)
     gmiccommand : bpy.props.PointerProperty(type=GmicCommand)
 
-
 @_
-class BGTSession(bpy.types.PropertyGroup):
+class Batches(bpy.types.PropertyGroup):
     jobs : bpy.props.CollectionProperty(type=Batch)
     jobs_i : bpy.props.IntProperty(min=-1,default=-1)
 
-
 @_
 class BGT_OT_do_batch(bpy.types.Operator):
-    bl_idname = "bgt.do_batch"
+    bl_idname = "batches.do_batch"
     bl_label = "do batch"
     job_index: bpy.props.IntProperty()
     @classmethod
@@ -64,9 +65,9 @@ class BGT_OT_do_batch(bpy.types.Operator):
     def execute(self,context):
         prefs = context.preferences.addons[__package__].preferences
         wm = context.window_manager
-        t = wm.bgt
+        t = wm.batches
         j = t.jobs[self.job_index]
-        cmd = j.gmiccommand.command
+        cmd = j.gmiccommand.text
         ipath = j.inputdir.path
         opath = j.outputdir.path
         print("cmd,ipath,opath:",cmd,ipath,opath)
@@ -82,7 +83,7 @@ class BGT_PT_main_panel(bpy.types.Panel):
     bl_region_type = "UI"
     bl_category = "batch"
     def draw(self,context):
-        op = self.layout.operator("bgt.do_batch")
+        op = self.layout.operator("batches.do_batch")
         op.job_index = 0
 
 
@@ -96,7 +97,7 @@ class BGT_PT_jobs(bpy.types.Panel):
     bl_order = 1
     def draw(self,context):
         wm = context.window_manager
-        b = wm.bgt
+        b = wm.batches
         self.layout.template_list("BGT_UL_job_listitem","",b,"jobs",b,"jobs_i")
 
 
@@ -124,8 +125,8 @@ class BatchgmicSettings(bpy.types.AddonPreferences):
 
 def register():
     list(map(bpy.utils.register_class,_()))
-    bpy.types.WindowManager.bgt = bpy.props.PointerProperty(type=BGTSession)
-    t = bpy.context.window_manager.bgt.jobs.add()
+    bpy.types.WindowManager.batches = bpy.props.PointerProperty(type=Batches)
+    t = bpy.context.window_manager.batches.jobs.add()
 
 
 def unregister():
